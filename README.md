@@ -23,3 +23,25 @@ tions without intervention, particularly in association with specific soil trend
 
 **Key Words**: Controlled Environment Facilities; Experimental design; Climate inter-
 ventions; Linear Mixed Model; Generalized Mixed Effects Model;
+
+# Pear Quality Index - Continuous Outcome
+
+Value between 0 and 100 that is associated to the levels of sugars and acids present in a fruit. Higher values, indicate higher quality levels. 
+First visualization of pear quality between Belgium and France, between the two species and across climate scenarios:
+
+<img width="951" height="587" alt="image" src="https://github.com/user-attachments/assets/bf3f4797-db50-42a9-ad9f-8034bae2485e" />
+
+# Pear Quality Index - Binary Outcome
+
+The values of quality index were dichotomized with a threshold of 60. The following visualization shows the proportion of pears in Belgium and France between species and across different scenarios.
+
+<img width="960" height="576" alt="image" src="https://github.com/user-attachments/assets/ee9883f8-2eed-428f-b353-f576b956362a" />
+
+# Repeated Measures of Pear Size over Time
+
+The size of pears was measured weekly for 24 weeks in total. The following graph shows the size increase over time.
+
+<img width="960" height="576" alt="image" src="https://github.com/user-attachments/assets/cfd33e8e-546f-4d46-bf77-5f3aea5b00ee" />
+
+
+

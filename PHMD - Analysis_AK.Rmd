@@ -1,0 +1,258 @@
+---
+title: "PHMD - Analysis"
+author: "Aglaia Kakoulidou"
+date: "2025-04-25"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(GGally)
+library(VIM)
+library(gridExtra)
+library(tidyverse)
+library(dplyr)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+```
+As a first step, we will go over the data and check for missing values.
+
+```{r Checking for missing data}
+# set up the grid
+par(mfrow = c(1, 3))
+m_plot_size <- matrixplot(G18.size.data, cex.axis = 0.3)
+title(main = "missingness in size data")
+m_plot_final <- matrixplot(G18.final.data, cex.axis = 0.8)
+title(main = "missingness in final data")
+m_plot_soil <- matrixplot(G18.soil.data, cex.axis = 0.3)
+title(main = "missingness in soil data")
+
+# print all three plots into a unique plot
+m_plot_size
+m_plot_final
+m_plot_soil
+```
+
+No missing values can be detected
+
+# Data Visualization
+
+Steps to follow and first thoughts:
+
+1. Take a glance at potential effect of climate scenarios on the quality index (Boxplots)
+2. Do the same across different regions (facets) and by accounting for species (Boxplots?)
+3. Check how much pears each tree contributes (Histogram)
+4. Interaction of tree species and climate (interaction plot)
+5. Convert the Gaussian outcome 'quality index' into a binary outcome with 60 as a cutoff
+6. Visualize 1,2 with the cutoff
+
+
+```{r}
+ggplot(G18.final.data, aes(x = factor(climate),
+                           y = quality_index,
+                           fill = species)) +
+         geom_boxplot(alpha = 0.7,
+               position = position_dodge(0.8)) +
+         facet_wrap(~location, ncol = 1)+
+         labs(title = "Quality Index among different climate scenarios and across Belgium and France",
+              x = "Climate Scenario",
+              y = "Pear Quality Index"
+            )+
+  theme_minimal()
+```
+
+```{r}
+ggplot(G18.final.data, aes( x = factor(climate),
+                            y = quality_index,
+                            fill = species)) +
+  geom_boxplot(alpha = 0.7,
+               position = position_dodge(0.8)) +
+  
+  labs(title = "Quality index across Ecotrons",
+       x = "Climate Scenario",
+       y = "Pear Quality Score") +
+  theme_minimal()
+              
+```
+
+As a next step, we would like to visualize the variability in the number of pears that were harvested per tree.
+
+```{r}
+
+ggplot(data = G18.soil.data, aes(x = pears)) +
+  geom_histogram(fill = "steelblue",
+                 color = "white",
+                 binwidth = 1) +
+  labs(title= "Variation of pear count across trees",
+       x = "Number of pears per tree",
+       y = "Tree Count") +
+  theme_minimal()
+
+```
+
+## Pear quality as a binary outcome
+
+Convert the pear quality score as a binary outcome by using 60 as cutoff. Evaluate how the climate scenarios and pear quality play a role in trees yielding good quality pears.
+
+```{r}
+G18.final.data_binary <- mutate(G18.final.data,
+                                quality_score_binary = ifelse(quality_index > 60,
+                                                              1,
+                                                              0))
+```
+
+### Checking for interaction between species and climate - continuous outcome
+
+```{r}
+interaction.plot(x.factor = G18.final.data$climate,
+                 trace.factor = G18.final.data$species,
+                 response = G18.final.data$quality_index,
+                 fun = mean,
+                 ylab = "Mean Quality Index",
+                 xlab = "Climate Scenario",
+                 trace.label = "Species",
+                 legend = TRUE)
+```
+
+
+```{r}
+interaction.plot(x.factor = G18.final.data_binary$climate,
+                 trace.factor = G18.final.data_binary$species,
+                 response = G18.final.data_binary$quality_score_binary,
+                 fun = mean,
+                 ylab = "Proportion of good quality pears",
+                 xlab = "Climate Scenario",
+                 trace.label = "Species",
+                 legend = TRUE)
+```
+```{r}
+model1 <- lmer(quality_index ~ climate + species + species:climate + location + (1|tree_id), data = G18.final.data)
+summary(model1)
+```
+
+```{r}
+
+ggplot(G18.final.data_binary, aes(x = climate,
+                               fill = factor(quality_score_binary)
+                           )) +
+         geom_bar(position = "dodge", alpha = 0.8) +
+         facet_wrap(~species) +
+         scale_fill_manual(values = c("0" = "#F8766D", "1" = "#00BFC4"),
+           labels = c("0" = "Low Quality", "1" = "High Quality"),
+                           name = "Pear Quality") +
+  labs(title = "Quality of pears across the 4 climate scenarios", x = "Climate Scenarios", y = "Pear count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Linear Mixed Effects Model without interaction - continuous outcome
+
+
+```{r}
+model2 <- lmer(quality_index ~ climate + species + location + (1|tree_id), data = G18.final.data)
+summary(model2)
+```
+```{r}
+pairs(emmeans(model2, ~ climate*species), adjust = "bonferroni")
+```
+
+```{r}
+plot(model2)
+qqnorm(resid(model2))
+```
+
+##  Binary Outcome
+### Logistic Regression for assessing the binary outcome
+
+```{r}
+model3 <- glmer(quality_score_binary ~ climate + species + location + (1|tree_id), data = G18.final.data_binary, family = binomial)
+summary(model3)
+```
+### Assessment of goodness of fit (deviance)
+
+```{r}
+model_null <- glmer(quality_score_binary ~ 1 + (1 | tree_id),
+                    data = G18.final.data_binary,
+                    family = binomial)
+
+anova(model_null, model3, test = "Chisq")
+```
+## Assessment of the impact of climate scenarions on the size of pears
+
+As a first step, we could take a glance at how the size changes each week across species and different climate scenarios.
+
+```{r}
+
+# Reshape the data by expanding the weeks into rows
+
+series_size_data <- G18.size.data %>% 
+  pivot_longer(cols = starts_with("week"),
+               names_to = "week",
+               values_to = "size") %>% 
+  mutate(week = as.integer(str_remove(week,"week_")))
+
+# plot the data as a time series graph 
+
+ggplot(series_size_data, aes(x = week, y = size, color = climate, group = climate)) +
+  stat_summary(fun = mean, geom = "line", size = 1) +
+  facet_wrap(~species) +
+  labs(title = "Pear Size Changes Over Weeks",
+       x = "Week",
+       y = "Size (cm)",
+       color = "Climate Scenario") +
+  theme_minimal()
+```
+We can observe that the size of conference pears grows much faster than the Doyenne pears. Generally, the Doyenne pears are smaller in size than the Conference.
+
+### Mathematical model 
+
+We are now going to evaluate the size of the pears as a function of the other covariates.
+
+As a first step we need to convert the data to a long format so that each size value is associated with all different covariates.
+
+```{r}
+size.data.long <- G18.size.data %>% pivot_longer(cols = starts_with("week_"), names_to = "week", values_to = "size") %>% 
+  mutate(week = as.numeric(str_remove(week, "week_")))
+```
+
+With this new dataset we can explore 
+
+
+```{r}
+ggplot(size.data.long, aes(x = factor(week), y = size, fill = climate)) +
+  geom_boxplot() +
+  facet_wrap(~species, ncol = 1) +
+  labs(title = "Growth of pear sizes over time and across different climate scenarios",
+       x = "Week", y = "Size") +
+  theme_minimal()
+```
+
+
+```{r}
+model_size_1 <- lmer(size ~ climate + species + week + (week | tree_id), data = size.data.long)
+summary(model_size_1)
+```
+Considering the difference in growth rates between species, we would like to also evaluate if the interaction between week and species is significant. 
+
+```{r}
+model_size_2 <- lmer(size ~ climate + species + week + week*species + (week | tree_id), data = size.data.long)
+summary(model_size_2)
+```
+Should we include the random effect in that model? Meaning, should we actually correct for growth variation among trees? We could build a model without the random effect and compare the models
+
+```{r}
+model_size_3 <- lm(size ~ climate + species + week, data = size.data.long)
+anova(model_size_1, model_size_3)
+```
+The model with the random effects is clearly a better model, as AIC and BIC drop significanctly.
+
+```{r}
+
+```
+
